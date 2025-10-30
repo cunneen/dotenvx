@@ -47,7 +47,7 @@ t.test('lock action - command line', async ct => {
     readableFilepaths: [],
     uniqueInjectedKeys: []
   })
-  await lock.call(fakeContext)
+  await lock.call(fakeContext, 'myPassphrase')
 
   t.ok(stub.called, 'new Lock().run() called')
   ct.ok(loggerStubs.success.calledWith('✔ /path/to/.env.keys.development (DOTENVX_PRIVATE_KEY_DEVELOPMENT) locked'), 'logger.success logs')
@@ -56,7 +56,7 @@ t.test('lock action - command line', async ct => {
   ct.end()
 })
 
-t.test('lock action - successMessage', (ct) => {
+t.test('lock action - successMessage', async (ct) => {
   // Stub the Lock service
   sinon.stub(Lock.prototype, 'run').returns({
     processedEnvs: [
@@ -69,7 +69,7 @@ t.test('lock action - successMessage', (ct) => {
 
   // const loggerSuccessStub = sinon.stub(logger, 'success')
 
-  lock.call(fakeContext)
+  await lock.call(fakeContext, 'myPassphrase')
 
   ct.ok(loggerStubs.success.calledWith('✔ /path/to/.env.keys.development (DOTENVX_PRIVATE_KEY_DEVELOPMENT) locked'), 'logger.success logs')
   ct.ok(loggerStubs.success.calledWith('✔ /path/to/.env.keys.production (DOTENVX_PRIVATE_KEY_PRODUCTION) locked'), 'logger.success logs')
@@ -77,25 +77,26 @@ t.test('lock action - successMessage', (ct) => {
   ct.end()
 })
 // ============================================================================================
-t.test('lock action - INVALID_ARGUMENTS', ct => {
+t.test('lock action - INVALID_PASS_PHRASE_OPTIONS', async ct => {
   const optsStub = sinon.stub().returns({})
   const fakeContext = { opts: optsStub }
-  const invalidArgumentsError = new Errors({ command: 'lock' }).invalidArguments()
+  const invalidArgumentsError = new Errors({ command: 'lock' }).invalidPassPhraseOptions()
   invalidArgumentsError.help = 'Mock help'
+
+  const processExitStub = sinon.stub(process, 'exit')
+
   // stub replacement for Lock.run()
-  const stub = sinon.stub(Lock.prototype, 'run').returns({
+  sinon.stub(Lock.prototype, 'run').returns({
     processedEnvs: [{ error: invalidArgumentsError }],
     changedFilepaths: [],
     unchangedFilepaths: []
   })
 
-  lock.call(fakeContext)
+  await lock.call(fakeContext)
 
-  t.ok(loggerStubs.error.calledWithMatch('[INVALID_ARGUMENTS] invalid arguments provided for action lock'), 'logger.error called for invalid arguments')
-  t.ok(stub.called, 'Lock().run() called')
+  t.ok(processExitStub.calledWith(1), 'process.exit(1)')
+  t.ok(loggerStubs.error.calledWithMatch('[INVALID_PASS_PHRASE_OPTIONS] no passphrase provided and no --prompt flag'), 'logger.error called for invalid arguments')
   t.ok(loggerStubs.debug.calledWithMatch('lock action called'), 'logger.debug called for lock action')
-  t.ok(loggerStubs.debug.calledWithMatch('about to call new Lock(...).run()'), 'logger.debug called before Lock.run()')
-  t.ok(loggerStubs.debug.calledWithMatch('Lock.run() completed returning processedEnvs: [{"error":{"code":"INVALID_ARGUMENTS","help":"Mock help"}}]'), 'logger.debug called after Lock.run() returned invalid arguments')
   t.ok(writeStub.notCalled, 'fsx.writeFileX')
   logger.silly(`| ====== end of test: ${ct.name} ======`)
 
@@ -103,7 +104,35 @@ t.test('lock action - INVALID_ARGUMENTS', ct => {
 })
 
 // ============================================================================================
-t.test('lock action - MISSING_ENV_FILE', ct => {
+t.test('lock action - EMPTY_PASS_PHRASE', async ct => {
+  const optsStub = sinon.stub().returns({ envKeysFile: '.env.keys' })
+  const fakeContext = { opts: optsStub }
+  const emptyPassphraseError = new Errors({}).emptyPassPhrase()
+  emptyPassphraseError.help = 'Mock help'
+  // stub replacement for Lock.run()
+  sinon.stub(Lock.prototype, 'run').returns({
+    processedEnvs: [{ error: emptyPassphraseError }],
+    changedFilepaths: [],
+    unchangedFilepaths: []
+  })
+  const ensurePasswordStub = sinon.stub().resolves(null)
+  const lock = proxyquire.noCallThru()('../../../../src/cli/actions/ext/lock', {
+    '../../../lib/helpers/passwordPrompt': { ensurePassword: ensurePasswordStub }
+  })
+  const processExitStub = sinon.stub(process, 'exit')
+
+  await lock.call(fakeContext, ' "" ')
+  t.ok(processExitStub.calledWith(1), 'process.exit(1)')
+
+  t.ok(ensurePasswordStub.called, 'ensurePasswordStub called')
+  t.ok(loggerStubs.error.calledWithMatch('[EMPTY_PASS_PHRASE] a valid passphrase could not be determined'), 'logger.error called for empty pass phrase')
+  t.ok(writeStub.notCalled, 'fsx.writeFileX')
+
+  ct.end()
+})
+
+// ============================================================================================
+t.test('lock action - MISSING_ENV_FILE', async ct => {
   const optsStub = sinon.stub().returns({})
   const fakeContext = { opts: optsStub }
   const missingEnvFileError = new Errors({ envFilepath: '.env', filepath: '/path/to/.env' }).missingEnvFile()
@@ -114,7 +143,7 @@ t.test('lock action - MISSING_ENV_FILE', ct => {
     unchangedFilepaths: []
   })
 
-  lock.call(fakeContext)
+  await lock.call(fakeContext, 'myPassphrase')
 
   t.ok(stub.called, 'Lock().run() called')
   t.ok(loggerStubs.error.calledWithMatch('[MISSING_ENV_FILE] missing .env file (/path/to/.env)'), 'logger.error called for missing env file')
@@ -125,7 +154,7 @@ t.test('lock action - MISSING_ENV_FILE', ct => {
   ct.end()
 })
 // ============================================================================================
-t.test('lock action - MULTIPLE ENVS', ct => {
+t.test('lock action - MULTIPLE ENVS', async ct => {
   const optsStub = sinon.stub().returns({ envKeysFile: '.env.keys', salt: 'justAPinch' })
   const fakeContext = { opts: optsStub, envs: ['development', 'production'] }
   // stub replacement for Lock.run()
@@ -138,7 +167,7 @@ t.test('lock action - MULTIPLE ENVS', ct => {
     unchangedFilepaths: []
   })
 
-  lock.call(fakeContext, 'myPassphrase')
+  await lock.call(fakeContext, 'myPassphrase')
 
   t.ok(stub.called, 'Lock().run() called')
   t.ok(loggerStubs.success.calledWithMatch('✔ /path/to/.env.keys.development (DOTENVX_PRIVATE_KEY_DEVELOPMENT) locked'), 'logger.success called')
@@ -149,7 +178,7 @@ t.test('lock action - MULTIPLE ENVS', ct => {
   ct.end()
 })
 // ============================================================================================
-t.test('lock action - CATCH ERROR', ct => {
+t.test('lock action - CATCH ERROR', async ct => {
   const error = new Error('Mock Error')
   error.help = 'Mock Help'
   error.debug = 'Mock Debug'
@@ -161,7 +190,7 @@ t.test('lock action - CATCH ERROR', ct => {
 
   const processExitStub = sinon.stub(process, 'exit')
 
-  lock.call(fakeContext, 'myPassphrase')
+  await lock.call(fakeContext, ' "" ')
 
   t.ok(stub.called, 'Lock().run() called')
   t.ok(loggerStubs.error.calledWith('Mock Error'), 'logger error')
@@ -171,6 +200,26 @@ t.test('lock action - CATCH ERROR', ct => {
   t.ok(processExitStub.calledWith(1), 'process.exit(1)')
   t.ok(writeStub.notCalled, 'fsx.writeFileX')
   logger.silly(`| ====== end of test: ${ct.name} ======`)
+
+  ct.end()
+})
+// ============================================================================================
+t.test('lock action - Lock().run() error', async ct => {
+  const optsStub = sinon.stub().returns({})
+  const fakeContext = { opts: optsStub }
+  // stub replacement for Lock.run()
+  const stub = sinon.stub(Lock.prototype, 'run').returns({
+    processedEnvs: [{ error: { code: 'MOCK_ERROR', message: '[MOCK_ERROR] message goes here', help: '[MOCK_ERROR] (help goes here)' } }],
+    changedFilepaths: [],
+    unchangedFilepaths: []
+  })
+
+  await lock.call(fakeContext, 'myPassphrase')
+
+  t.ok(stub.called, 'Lock().run() called')
+  t.ok(loggerStubs.error.calledWithMatch('[MOCK_ERROR] message goes here'), 'logger.error called for mock error')
+  t.ok(loggerStubs.help.calledWithMatch('[MOCK_ERROR] (help goes here)'), 'logger.help called for mock error')
+  t.ok(writeStub.notCalled, 'fsx.writeFileX')
 
   ct.end()
 })

@@ -27,10 +27,13 @@ function deriveKey (password, salt) {
  * @returns {Uint8Array} - the converted key
  */
 function getKeyFromPasswordAndSalt (password, salt) {
+  // trim leading and trailing quotes and whitespace
+  const quotesRegex = /^['"]+|['"]+$/g
+  const normalizedPassword = password.normalize().trim().replace(quotesRegex, '')
+  const normalizedSalt = salt?.normalize().trim().replace(quotesRegex, '') || undefined
   // Convert password into 32-byte key using scrypt
   // sync, but scryptAsync is also available
-  const normalizedSalt = salt?.normalize() || undefined
-  const key = deriveKey(password.normalize(), normalizedSalt)
+  const key = deriveKey(normalizedPassword, normalizedSalt)
   return key
 }
 

@@ -13,6 +13,15 @@ class Errors {
     this.message = options.message
   }
 
+  emptyPassPhrase () {
+    const code = 'EMPTY_PASS_PHRASE'
+    const message = `[${code}] a valid passphrase could not be determined`
+
+    const e = new Error(message)
+    e.code = code
+    return e
+  }
+
   missingEnvFile () {
     const code = 'MISSING_ENV_FILE'
     const message = `[${code}] missing ${this.envFilepath} file (${this.filepath})`
@@ -86,6 +95,23 @@ class Errors {
     const code = 'INVALID_PASS_PHRASE'
     const message = `[${code}] could not decrypt private key '${this.privateKeyName}=${truncate(this.privateKey)}' using the provided passphrase and salt`
 
+    const e = new Error(message)
+    e.code = code
+    return e
+  }
+
+  invalidPassPhraseOptions () {
+    const code = 'INVALID_PASS_PHRASE_OPTIONS'
+    const message = `[${code}] no passphrase provided and no --prompt flag`
+
+    const e = new Error(message)
+    e.code = code
+    return e
+  }
+
+  invalidPassPhraseOptionsNonTTY () {
+    const code = 'INVALID_PASS_PHRASE_OPTIONS_NONTTY'
+    const message = `[${code}] no passphrase provided and cannot prompt (not a TTY)`
     const e = new Error(message)
     e.code = code
     return e
